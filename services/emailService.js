@@ -7,11 +7,16 @@ import { fileURLToPath } from 'url';
 // 1. Setup Directory Handling (To find your logo)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+console.log("--- DEBUGGING EMAIL CREDENTIALS ---");
+console.log("SMTP_HOST:", process.env.SMTP_HOST);
+console.log("SMTP_USER:", process.env.SMTP_USER ? "Loaded (Check spelling)" : "MISSING ❌");
+console.log("SMTP_PASS:", process.env.SMTP_PASS ? "Loaded (Hidden)" : "MISSING ❌");
+console.log("-----------------------------------");
 
 // 2. Create the Transporter (UPDATED FOR RAILWAY STABILITY)
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com', // Default to Gmail if env missing
-  port: Number(process.env.SMTP_PORT) || 587,      // Default to 587
+  port: 465,      // Default to 587
   secure: false, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
@@ -328,3 +333,18 @@ export const sendCancellationEmail = async (userEmail, userName, trackingId) => 
     html: wrapContent(content),
   });
 };
+
+setTimeout(async () => {
+    console.log("⏳ STARTING EMAIL SELF-TEST...");
+    try {
+        await transporter.sendMail({
+            from: process.env.SMTP_USER,
+            to: process.env.SMTP_USER, // Sending to yourself
+            subject: "Railway Test Email",
+            text: "If you see this, Nodemailer is working on Railway!"
+        });
+        console.log("✅ SELF-TEST PASSED: Email sent successfully!");
+    } catch (err) {
+        console.error("❌ SELF-TEST FAILED:", err);
+    }
+}, 5000);
