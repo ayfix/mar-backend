@@ -8,15 +8,18 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 2. Create the Transporter
+// 2. Create the Transporter (UPDATED FOR RAILWAY STABILITY)
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false, 
+  host: process.env.SMTP_HOST || 'smtp.gmail.com', // Default to Gmail if env missing
+  port: Number(process.env.SMTP_PORT) || 587,      // Default to 587
+  secure: false, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    pass: process.env.SMTP_PASS, // Make sure this is the App Password
   },
+  tls: {
+    rejectUnauthorized: false // Helps prevent certificate errors on some cloud servers
+  }
 });
 
 transporter.verify((error, success) => {
@@ -39,14 +42,20 @@ const createInvoicePDF = (shipment, userName) => {
       resolve(pdfData);
     });
 
-    // --- 1. HEADER SECTION ---
-    const logoPath = path.join(__dirname, '../assets/logo.png');
-    
-    // Attempt to load logo, fallback to text if missing
-    if (fs.existsSync(logoPath)) {
-        doc.image(logoPath, 50, 45, { width: 100 });
-    } else {
+    // --- 1. HEADER SECTION (FIXED FOR RAILWAY) ---
+    // We wrap this in try/catch to prevent server crash if logo is missing
+    try {
+        const logoPath = path.join(__dirname, '../assets/logo.png');
+        if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, 50, 45, { width: 100 });
+        } else {
+            // Fallback if file not found
+            doc.fillColor('#D9534F').fontSize(20).text('MAR', 50, 50);
+        }
+    } catch (err) {
+        // Fallback if path resolution fails
         doc.fillColor('#D9534F').fontSize(20).text('MAR', 50, 50);
+        console.warn("⚠️ Warning: Logo image could not be loaded. Using text fallback.");
     }
 
     // Company Details (Right Aligned)
@@ -232,8 +241,7 @@ export const sendBookingConfirmation = async (userEmail, userName, shipment) => 
 
     // 3. Send Email with Attachment
     await transporter.sendMail({
-      from: `"MAR Transport" <${process.env.SMTP_USER}>`
-,
+      from: `"MAR Transport" <${process.env.SMTP_USER}>`,
       to: userEmail,
       subject: `Booking Confirmed - #${shipment.trackingId}`,
       html: wrapContent(invoiceHtml),
@@ -280,8 +288,7 @@ export const sendFleetDetails = async (userEmail, userName, trackingId, driverNa
   `;
 
   await transporter.sendMail({
-    from: `"MAR Transport" <${process.env.SMTP_USER}>`
-,
+    from: `"MAR Transport" <${process.env.SMTP_USER}>`,
     to: userEmail,
     subject: `Fleet Assigned - #${trackingId}`,
     html: wrapContent(content),
@@ -298,8 +305,7 @@ export const sendDeliveryConfirmation = async (userEmail, userName, trackingId) 
     <p>Your shipment #${trackingId} has been successfully delivered.</p>
   `;
   await transporter.sendMail({
-    from: `"MAR Transport" <${process.env.SMTP_USER}>`
-,
+    from: `"MAR Transport" <${process.env.SMTP_USER}>`,
     to: userEmail,
     subject: `Delivered - #${trackingId}`,
     html: wrapContent(content),
@@ -316,8 +322,7 @@ export const sendCancellationEmail = async (userEmail, userName, trackingId) => 
     <p>Your shipment #${trackingId} has been cancelled.</p>
   `;
   await transporter.sendMail({
-    from: `"MAR Transport" <${process.env.SMTP_USER}>`
-,
+    from: `"MAR Transport" <${process.env.SMTP_USER}>`,
     to: userEmail,
     subject: `Shipment Cancelled - #${trackingId}`,
     html: wrapContent(content),
