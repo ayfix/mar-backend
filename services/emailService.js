@@ -4,26 +4,27 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// 1. Setup Directory Handling (To find your logo)
+// 1. Setup Directory Handling
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- DEBUG LOGS ---
 console.log("--- DEBUGGING EMAIL CREDENTIALS ---");
-console.log("SMTP_HOST:", process.env.SMTP_HOST);
-console.log("SMTP_USER:", process.env.SMTP_USER ? "Loaded (Check spelling)" : "MISSING ❌");
-console.log("SMTP_PASS:", process.env.SMTP_PASS ? "Loaded (Hidden)" : "MISSING ❌");
+console.log("SMTP_HOST:", process.env.SMTP_HOST || 'smtp.gmail.com');
+console.log("SMTP_USER:", process.env.SMTP_USER ? "Loaded" : "MISSING ❌");
 console.log("-----------------------------------");
 
-// 2. Create the Transporter (UPDATED FOR RAILWAY STABILITY)
+// 2. Create the Transporter (FIXED CONFIGURATION)
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com', // Default to Gmail if env missing
-  port:465,      // Default to 587
-  secure: false, // true for 465, false for other ports
+  host: 'smtp.gmail.com',
+  port: 465,              // Using SSL Port
+  secure: true,           // ✅ IMPORTANT: Must be TRUE for Port 465
   auth: {
     user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS, // Make sure this is the App Password
+    pass: process.env.SMTP_PASS,
   },
   tls: {
-    rejectUnauthorized: false // Helps prevent certificate errors on some cloud servers
+    rejectUnauthorized: false
   }
 });
 
@@ -47,21 +48,9 @@ const createInvoicePDF = (shipment, userName) => {
       resolve(pdfData);
     });
 
-    // --- 1. HEADER SECTION (FIXED FOR RAILWAY) ---
-    // We wrap this in try/catch to prevent server crash if logo is missing
-    try {
-        const logoPath = path.join(__dirname, '../assets/logo.png');
-        if (fs.existsSync(logoPath)) {
-            doc.image(logoPath, 50, 45, { width: 100 });
-        } else {
-            // Fallback if file not found
-            doc.fillColor('#D9534F').fontSize(20).text('MAR', 50, 50);
-        }
-    } catch (err) {
-        // Fallback if path resolution fails
-        doc.fillColor('#D9534F').fontSize(20).text('MAR', 50, 50);
-        console.warn("⚠️ Warning: Logo image could not be loaded. Using text fallback.");
-    }
+    // --- 1. HEADER SECTION (NO LOGO / TEXT ONLY) ---
+    // We removed the image loading entirely to prevent crashes.
+    doc.fillColor('#D9534F').fontSize(20).text('MAR', 50, 50);
 
     // Company Details (Right Aligned)
     doc.fillColor('#444444')
@@ -136,7 +125,6 @@ const createInvoicePDF = (shipment, userName) => {
     doc.text(`Freight Charges: ${shipment.goodsType || 'General'}`, descX, position, { width: 220 });
     doc.text(`${shipment.quantity} Qty / ${shipment.weight} Kg`, qtyX, position);
     
-    // ✅ FIX 1: Changed `₹` to `Rs.` so it prints correctly
     doc.text(`Rs. ${Number(shipment.price).toFixed(2)}`, amountX, position, { align: 'right' });
     
     // Line below row
@@ -153,18 +141,15 @@ const createInvoicePDF = (shipment, userName) => {
     // Subtotal
     doc.font('Helvetica-Bold');
     doc.text('Sub Total', 350, subtotalPosition);
-    // ✅ FIX 1: Changed `₹` to `Rs.`
     doc.text(`Rs. ${basePrice.toFixed(2)}`, amountX, subtotalPosition, { align: 'right' });
 
     // SGST
     doc.font('Helvetica');
     doc.text('SGST (9%)', 350, subtotalPosition + 15);
-    // ✅ FIX 1: Changed `₹` to `Rs.`
     doc.text(`Rs. ${sgst.toFixed(2)}`, amountX, subtotalPosition + 15, { align: 'right' });
 
     // CGST
     doc.text('CGST (9%)', 350, subtotalPosition + 30);
-    // ✅ FIX 1: Changed `₹` to `Rs.`
     doc.text(`Rs. ${cgst.toFixed(2)}`, amountX, subtotalPosition + 30, { align: 'right' });
 
     // Total Background
@@ -173,7 +158,6 @@ const createInvoicePDF = (shipment, userName) => {
     // Grand Total
     doc.fillColor('#ffffff').fontSize(12).font('Helvetica-Bold');
     doc.text('Total Amount', 350, subtotalPosition + 57);
-    // ✅ FIX 1: Changed `₹` to `Rs.`
     doc.text(`Rs. ${total.toFixed(2)}`, amountX, subtotalPosition + 57, { align: 'right' });
 
     // --- 6. FOOTER ---
@@ -185,7 +169,6 @@ const createInvoicePDF = (shipment, userName) => {
     doc.text('Payment is required within 15 days of invoice date.', 50, footerTop + 15, { align: 'center' });
     doc.text('Thank you for your business!', 50, footerTop + 30, { align: 'center' });
     
-    // ✅ FIX 2: Changed from dynamic date to hardcoded 1960
     doc.font('Helvetica-Bold').text('MAR Transport © 1960', 50, footerTop + 45, { align: 'center' });
 
     doc.end();
@@ -219,30 +202,58 @@ const wrapContent = (content) => `
 
 /**
  * SCENARIO 1: Booking Confirmation + PDF ATTACHMENT
+ * (Restored from Text-Only mode back to PDF mode)
  */
 export const sendBookingConfirmation = async (userEmail, userName, shipment) => {
-  console.log("🚀 STARTING TEXT-ONLY EMAIL TEST...");
+  console.log("🚀 PREPARING PDF EMAIL...");
   
   try {
-    // We are NOT generating a PDF here. Just testing the connection.
+    // 1. Generate PDF (No Logo)
+    const pdfBuffer = await createInvoicePDF(shipment, userName);
+
+    // 2. Prepare HTML Email
+    const basePrice = Number(shipment.price);
+    const totalAmount = (basePrice * 1.18).toFixed(2);
+    
+    const invoiceHtml = `
+      <h2>Booking Confirmed!</h2>
+      <p>Dear ${userName},</p>
+      <p>Thank you for booking with MAR Transport. Your shipment <strong>#${shipment.trackingId}</strong> has been received.</p>
+      
+      <p style="text-align:center;">
+        <span style="display:inline-block; padding:10px 20px; background-color:#eef; border-radius:4px; font-weight:bold; color:#003366;">
+           Total to Pay: Rs. ${totalAmount}
+        </span>
+      </p>
+
+      <p><strong>Please find your Official Tax Invoice attached to this email.</strong></p>
+      <p>You can download it for your records.</p>
+    `;
+
+    // 3. Send Email with Attachment
     await transporter.sendMail({
       from: `"MAR Transport" <${process.env.SMTP_USER}>`,
       to: userEmail,
-      subject: `TEST EMAIL - Connection Check`,
-      text: `Hello ${userName}, if you receive this, the connection works! The problem was the PDF/Logo.`,
+      subject: `Booking Confirmed - #${shipment.trackingId}`,
+      html: wrapContent(invoiceHtml),
+      attachments: [
+        {
+          filename: `Invoice-${shipment.trackingId}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        }
+      ]
     });
-    console.log(`✅ Text Email sent to ${userEmail}`);
+    console.log(`✅ Invoice PDF Email sent to ${userEmail}`);
   } catch (error) {
-    console.error("❌ EMAIL FAILED:", error);
+    console.error("❌ Error generating/sending invoice:", error);
   }
 };
 
 /**
- * SCENARIO 2: Fleet Assignment (Updated for iOS Click Fix)
+ * SCENARIO 2: Fleet Assignment
  */
 export const sendFleetDetails = async (userEmail, userName, trackingId, driverName, truckNumber, driverPhone) => {
-  
-  // Clean the phone number
   const cleanPhone = driverPhone ? driverPhone.toString().replace(/\D/g, '') : '';
 
   const content = `
@@ -307,12 +318,13 @@ export const sendCancellationEmail = async (userEmail, userName, trackingId) => 
   });
 };
 
+// --- SELF-TEST ---
 setTimeout(async () => {
     console.log("⏳ STARTING EMAIL SELF-TEST...");
     try {
         await transporter.sendMail({
             from: process.env.SMTP_USER,
-            to: process.env.SMTP_USER, // Sending to yourself
+            to: process.env.SMTP_USER, 
             subject: "Railway Test Email",
             text: "If you see this, Nodemailer is working on Railway!"
         });
