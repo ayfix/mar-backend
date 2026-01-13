@@ -67,7 +67,7 @@ app.get('/test-email', async (req, res) => {
     
     // We await this to catch errors immediately
     await sendBookingConfirmation(
-      "your-actual-email@gmail.com", // ⚠️ REPLACE THIS with your own email to test
+      "kishores.developer@gmail.com", // ⚠️ REPLACE THIS with your own email to test
       "Test User", 
       fakeShipment
     );
