@@ -17,6 +17,7 @@ import publicShipmentsRouter from './routes/publicShipments.js'; // <--- 1. IMPO
 import shipmentRoutes from './routes/clientShipments.js';
 import reportRoutes from './routes/reportRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
+import { sendBookingConfirmation } from './path/to/your/emailFile.js';
 const app = express();
 connectDB();
 
@@ -46,6 +47,38 @@ app.use('/api/client', clientAccountRouter);
 
 // Root
 app.get('/', (req, res) => res.send('MAR Transport Backend (ESM)'));
+app.get('/test-email', async (req, res) => {
+  console.log("🛠️ TEST ROUTE HIT: Starting Email Test...");
+
+  // Mock Data (Fake Shipment) to test PDF & Email
+  const fakeShipment = {
+    trackingId: "TEST-123",
+    contactPhone: "9999999999",
+    pickupLocation: "Chennai Test Hub",
+    deliveryLocation: "Bangalore Test Hub",
+    goodsType: "Electronics",
+    quantity: 10,
+    weight: 50,
+    price: 1000
+  };
+
+  try {
+    console.log("👉 Calling sendBookingConfirmation...");
+    
+    // We await this to catch errors immediately
+    await sendBookingConfirmation(
+      "your-actual-email@gmail.com", // ⚠️ REPLACE THIS with your own email to test
+      "Test User", 
+      fakeShipment
+    );
+
+    console.log("✅ Email function finished without crashing.");
+    res.send("<h1>Check your inbox!</h1><p>If you see this, the code ran successfully.</p>");
+  } catch (error) {
+    console.error("❌ CRITICAL ERROR IN TEST ROUTE:", error);
+    res.status(500).send(`<h1>Failed</h1><p>${error.message}</p>`);
+  }
+});
 
 // Global Error Handler
 app.use((err, req, res, next) => {
