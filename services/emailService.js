@@ -11,12 +11,20 @@ const __dirname = path.dirname(__filename);
 // 2. Create the Transporter
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
+  port: Number(process.env.SMTP_PORT),
   secure: false, 
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+});
+
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ SMTP CONNECTION FAILED:", error);
+  } else {
+    console.log("✅ SMTP SERVER READY");
+  }
 });
 
 // --- HELPER: GENERATE ENTERPRISE PDF INVOICE ---
@@ -224,7 +232,8 @@ export const sendBookingConfirmation = async (userEmail, userName, shipment) => 
 
     // 3. Send Email with Attachment
     await transporter.sendMail({
-      from: '"MAR Transport" <no-reply@martransport.com>',
+      from: `"MAR Transport" <${process.env.SMTP_USER}>`
+,
       to: userEmail,
       subject: `Booking Confirmed - #${shipment.trackingId}`,
       html: wrapContent(invoiceHtml),
@@ -271,7 +280,8 @@ export const sendFleetDetails = async (userEmail, userName, trackingId, driverNa
   `;
 
   await transporter.sendMail({
-    from: '"MAR Transport" <no-reply@martransport.com>',
+    from: `"MAR Transport" <${process.env.SMTP_USER}>`
+,
     to: userEmail,
     subject: `Fleet Assigned - #${trackingId}`,
     html: wrapContent(content),
@@ -288,7 +298,8 @@ export const sendDeliveryConfirmation = async (userEmail, userName, trackingId) 
     <p>Your shipment #${trackingId} has been successfully delivered.</p>
   `;
   await transporter.sendMail({
-    from: '"MAR Transport" <no-reply@martransport.com>',
+    from: `"MAR Transport" <${process.env.SMTP_USER}>`
+,
     to: userEmail,
     subject: `Delivered - #${trackingId}`,
     html: wrapContent(content),
@@ -305,7 +316,8 @@ export const sendCancellationEmail = async (userEmail, userName, trackingId) => 
     <p>Your shipment #${trackingId} has been cancelled.</p>
   `;
   await transporter.sendMail({
-    from: '"MAR Transport" <no-reply@martransport.com>',
+    from: `"MAR Transport" <${process.env.SMTP_USER}>`
+,
     to: userEmail,
     subject: `Shipment Cancelled - #${trackingId}`,
     html: wrapContent(content),
