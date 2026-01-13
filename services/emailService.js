@@ -16,7 +16,7 @@ console.log("-----------------------------------");
 // 2. Create the Transporter (UPDATED FOR RAILWAY STABILITY)
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com', // Default to Gmail if env missing
-  port: 465,      // Default to 587
+  port:465,      // Default to 587
   secure: false, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
