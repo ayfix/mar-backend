@@ -221,46 +221,19 @@ const wrapContent = (content) => `
  * SCENARIO 1: Booking Confirmation + PDF ATTACHMENT
  */
 export const sendBookingConfirmation = async (userEmail, userName, shipment) => {
+  console.log("🚀 STARTING TEXT-ONLY EMAIL TEST...");
+  
   try {
-    // 1. Generate PDF
-    const pdfBuffer = await createInvoicePDF(shipment, userName);
-
-    // 2. Prepare HTML Email
-    const basePrice = Number(shipment.price);
-    const totalAmount = (basePrice * 1.18).toFixed(2);
-    
-    const invoiceHtml = `
-      <h2>Booking Confirmed!</h2>
-      <p>Dear ${userName},</p>
-      <p>Thank you for booking with MAR Transport. Your shipment <strong>#${shipment.trackingId}</strong> has been received.</p>
-      
-      <p style="text-align:center;">
-        <span style="display:inline-block; padding:10px 20px; background-color:#eef; border-radius:4px; font-weight:bold; color:#003366;">
-           Total to Pay: Rs. ${totalAmount}
-        </span>
-      </p>
-
-      <p><strong>Please find your Official Tax Invoice attached to this email.</strong></p>
-      <p>You can download it for your records.</p>
-    `;
-
-    // 3. Send Email with Attachment
+    // We are NOT generating a PDF here. Just testing the connection.
     await transporter.sendMail({
       from: `"MAR Transport" <${process.env.SMTP_USER}>`,
       to: userEmail,
-      subject: `Booking Confirmed - #${shipment.trackingId}`,
-      html: wrapContent(invoiceHtml),
-      attachments: [
-        {
-          filename: `Invoice-${shipment.trackingId}.pdf`,
-          content: pdfBuffer,
-          contentType: 'application/pdf'
-        }
-      ]
+      subject: `TEST EMAIL - Connection Check`,
+      text: `Hello ${userName}, if you receive this, the connection works! The problem was the PDF/Logo.`,
     });
-    console.log(`✅ Invoice Email sent to ${userEmail}`);
+    console.log(`✅ Text Email sent to ${userEmail}`);
   } catch (error) {
-    console.error("❌ Error generating/sending invoice:", error);
+    console.error("❌ EMAIL FAILED:", error);
   }
 };
 
