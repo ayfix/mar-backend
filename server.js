@@ -17,7 +17,7 @@ import publicShipmentsRouter from './routes/publicShipments.js'; // <--- 1. IMPO
 import shipmentRoutes from './routes/clientShipments.js';
 import reportRoutes from './routes/reportRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
-import { sendBookingConfirmation } from './path/to/your/emailFile.js';
+import { sendBookingConfirmation } from './services/emailService.js';
 const app = express();
 connectDB();
 
