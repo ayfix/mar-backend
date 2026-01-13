@@ -4,36 +4,19 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// 1. Setup Directory Handling
+// 1. Setup Directory Handling (To find your logo)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- DEBUG LOGS ---
-console.log("--- DEBUGGING EMAIL CREDENTIALS ---");
-console.log("SMTP_HOST:", process.env.SMTP_HOST || 'smtp.gmail.com');
-console.log("SMTP_USER:", process.env.SMTP_USER ? "Loaded" : "MISSING ❌");
-console.log("-----------------------------------");
-
-// 2. Create the Transporter (FIXED CONFIGURATION)
+// 2. Create the Transporter
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,              // Using SSL Port
-  secure: true,           // ✅ IMPORTANT: Must be TRUE for Port 465
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  secure: false, 
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
-  tls: {
-    rejectUnauthorized: false
-  }
-});
-
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("❌ SMTP CONNECTION FAILED:", error);
-  } else {
-    console.log("✅ SMTP SERVER READY");
-  }
 });
 
 // --- HELPER: GENERATE ENTERPRISE PDF INVOICE ---
@@ -48,9 +31,15 @@ const createInvoicePDF = (shipment, userName) => {
       resolve(pdfData);
     });
 
-    // --- 1. HEADER SECTION (NO LOGO / TEXT ONLY) ---
-    // We removed the image loading entirely to prevent crashes.
-    doc.fillColor('#D9534F').fontSize(20).text('MAR', 50, 50);
+    // --- 1. HEADER SECTION ---
+    const logoPath = path.join(__dirname, '../assets/logo.png');
+    
+    // Attempt to load logo, fallback to text if missing
+    if (fs.existsSync(logoPath)) {
+        doc.image(logoPath, 50, 45, { width: 100 });
+    } else {
+        doc.fillColor('#D9534F').fontSize(20).text('MAR', 50, 50);
+    }
 
     // Company Details (Right Aligned)
     doc.fillColor('#444444')
@@ -125,6 +114,7 @@ const createInvoicePDF = (shipment, userName) => {
     doc.text(`Freight Charges: ${shipment.goodsType || 'General'}`, descX, position, { width: 220 });
     doc.text(`${shipment.quantity} Qty / ${shipment.weight} Kg`, qtyX, position);
     
+    // ✅ FIX 1: Changed `₹` to `Rs.` so it prints correctly
     doc.text(`Rs. ${Number(shipment.price).toFixed(2)}`, amountX, position, { align: 'right' });
     
     // Line below row
@@ -141,15 +131,18 @@ const createInvoicePDF = (shipment, userName) => {
     // Subtotal
     doc.font('Helvetica-Bold');
     doc.text('Sub Total', 350, subtotalPosition);
+    // ✅ FIX 1: Changed `₹` to `Rs.`
     doc.text(`Rs. ${basePrice.toFixed(2)}`, amountX, subtotalPosition, { align: 'right' });
 
     // SGST
     doc.font('Helvetica');
     doc.text('SGST (9%)', 350, subtotalPosition + 15);
+    // ✅ FIX 1: Changed `₹` to `Rs.`
     doc.text(`Rs. ${sgst.toFixed(2)}`, amountX, subtotalPosition + 15, { align: 'right' });
 
     // CGST
     doc.text('CGST (9%)', 350, subtotalPosition + 30);
+    // ✅ FIX 1: Changed `₹` to `Rs.`
     doc.text(`Rs. ${cgst.toFixed(2)}`, amountX, subtotalPosition + 30, { align: 'right' });
 
     // Total Background
@@ -158,6 +151,7 @@ const createInvoicePDF = (shipment, userName) => {
     // Grand Total
     doc.fillColor('#ffffff').fontSize(12).font('Helvetica-Bold');
     doc.text('Total Amount', 350, subtotalPosition + 57);
+    // ✅ FIX 1: Changed `₹` to `Rs.`
     doc.text(`Rs. ${total.toFixed(2)}`, amountX, subtotalPosition + 57, { align: 'right' });
 
     // --- 6. FOOTER ---
@@ -169,6 +163,7 @@ const createInvoicePDF = (shipment, userName) => {
     doc.text('Payment is required within 15 days of invoice date.', 50, footerTop + 15, { align: 'center' });
     doc.text('Thank you for your business!', 50, footerTop + 30, { align: 'center' });
     
+    // ✅ FIX 2: Changed from dynamic date to hardcoded 1960
     doc.font('Helvetica-Bold').text('MAR Transport © 1960', 50, footerTop + 45, { align: 'center' });
 
     doc.end();
@@ -202,13 +197,10 @@ const wrapContent = (content) => `
 
 /**
  * SCENARIO 1: Booking Confirmation + PDF ATTACHMENT
- * (Restored from Text-Only mode back to PDF mode)
  */
 export const sendBookingConfirmation = async (userEmail, userName, shipment) => {
-  console.log("🚀 PREPARING PDF EMAIL...");
-  
   try {
-    // 1. Generate PDF (No Logo)
+    // 1. Generate PDF
     const pdfBuffer = await createInvoicePDF(shipment, userName);
 
     // 2. Prepare HTML Email
@@ -232,7 +224,7 @@ export const sendBookingConfirmation = async (userEmail, userName, shipment) => 
 
     // 3. Send Email with Attachment
     await transporter.sendMail({
-      from: `"MAR Transport" <${process.env.SMTP_USER}>`,
+      from: '"MAR Transport" <no-reply@martransport.com>',
       to: userEmail,
       subject: `Booking Confirmed - #${shipment.trackingId}`,
       html: wrapContent(invoiceHtml),
@@ -244,16 +236,18 @@ export const sendBookingConfirmation = async (userEmail, userName, shipment) => 
         }
       ]
     });
-    console.log(`✅ Invoice PDF Email sent to ${userEmail}`);
+    console.log(`✅ Invoice Email sent to ${userEmail}`);
   } catch (error) {
     console.error("❌ Error generating/sending invoice:", error);
   }
 };
 
 /**
- * SCENARIO 2: Fleet Assignment
+ * SCENARIO 2: Fleet Assignment (Updated for iOS Click Fix)
  */
 export const sendFleetDetails = async (userEmail, userName, trackingId, driverName, truckNumber, driverPhone) => {
+  
+  // Clean the phone number
   const cleanPhone = driverPhone ? driverPhone.toString().replace(/\D/g, '') : '';
 
   const content = `
@@ -277,7 +271,7 @@ export const sendFleetDetails = async (userEmail, userName, trackingId, driverNa
   `;
 
   await transporter.sendMail({
-    from: `"MAR Transport" <${process.env.SMTP_USER}>`,
+    from: '"MAR Transport" <no-reply@martransport.com>',
     to: userEmail,
     subject: `Fleet Assigned - #${trackingId}`,
     html: wrapContent(content),
@@ -294,7 +288,7 @@ export const sendDeliveryConfirmation = async (userEmail, userName, trackingId) 
     <p>Your shipment #${trackingId} has been successfully delivered.</p>
   `;
   await transporter.sendMail({
-    from: `"MAR Transport" <${process.env.SMTP_USER}>`,
+    from: '"MAR Transport" <no-reply@martransport.com>',
     to: userEmail,
     subject: `Delivered - #${trackingId}`,
     html: wrapContent(content),
@@ -311,25 +305,9 @@ export const sendCancellationEmail = async (userEmail, userName, trackingId) => 
     <p>Your shipment #${trackingId} has been cancelled.</p>
   `;
   await transporter.sendMail({
-    from: `"MAR Transport" <${process.env.SMTP_USER}>`,
+    from: '"MAR Transport" <no-reply@martransport.com>',
     to: userEmail,
     subject: `Shipment Cancelled - #${trackingId}`,
     html: wrapContent(content),
   });
 };
-
-// --- SELF-TEST ---
-setTimeout(async () => {
-    console.log("⏳ STARTING EMAIL SELF-TEST...");
-    try {
-        await transporter.sendMail({
-            from: process.env.SMTP_USER,
-            to: process.env.SMTP_USER, 
-            subject: "Railway Test Email",
-            text: "If you see this, Nodemailer is working on Railway!"
-        });
-        console.log("✅ SELF-TEST PASSED: Email sent successfully!");
-    } catch (err) {
-        console.error("❌ SELF-TEST FAILED:", err);
-    }
-}, 5000);
